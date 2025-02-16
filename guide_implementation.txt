@@ -1,0 +1,166 @@
+Guide d'Implémentation - Ajout de Fonctionnalités à l'Application d'Analyse de Portefeuille
+
+1. SYSTÈME D'AUTHENTIFICATION À PLUSIEURS NIVEAUX
+------------------------------------------------
+Ajouter ce code au début de votre application :
+
+```python
+def check_access_level():
+    if 'access_level' not in st.session_state:
+        st.session_state.access_level = None
+    
+    password = st.text_input("Mot de passe", type="password")
+    if password == "VOTRE_MDP_BASIQUE":
+        st.session_state.access_level = "basic"
+        return True
+    elif password == "VOTRE_MDP_COMPLET":
+        st.session_state.access_level = "full"
+        return True
+    return False
+
+def get_menu_options():
+    if st.session_state.access_level == "full":
+        return ["Vue Globale", "Vue Détaillée", "Tableau Croisé", "Documentation"]
+    else:
+        return ["Vue Globale", "Vue Détaillée"]
+```
+
+2. TABLEAU CROISÉ DYNAMIQUE
+--------------------------
+Ajouter cette nouvelle fonction :
+
+```python
+def show_pivot_table(df):
+    st.title("Tableau Croisé Dynamique")
+    
+    # Sélection des colonnes
+    available_columns = df.columns.tolist()
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        rows = st.multiselect(
+            "Sélectionner les lignes",
+            available_columns,
+            default=["PORTEFEUILLE"]
+        )
+    
+    with col2:
+        cols = st.multiselect(
+            "Sélectionner les colonnes",
+            available_columns,
+            default=["GENRE DU TITRE"]
+        )
+    
+    # Sélection des valeurs et de l'agrégation
+    values = st.multiselect(
+        "Sélectionner les valeurs à agréger",
+        available_columns,
+        default=["QUANTITE"]
+    )
+    
+    agg_func = st.selectbox(
+        "Fonction d'agrégation",
+        ["sum", "mean", "count", "min", "max"]
+    )
+    
+    if rows and cols and values:
+        try:
+            pivot_table = pd.pivot_table(
+                df,
+                values=values,
+                index=rows,
+                columns=cols,
+                aggfunc=agg_func,
+                fill_value=0
+            )
+            
+            st.write(pivot_table)
+            
+            # Option pour télécharger le tableau
+            csv = pivot_table.to_csv()
+            st.download_button(
+                "Télécharger le tableau (CSV)",
+                csv,
+                "pivot_table.csv",
+                "text/csv"
+            )
+            
+        except Exception as e:
+            st.error(f"Erreur lors de la création du tableau croisé: {str(e)}")
+```
+
+3. MODIFICATION DE LA FONCTION PRINCIPALE
+---------------------------------------
+Remplacer votre fonction main actuelle par :
+
+```python
+def main():
+    st.set_page_config(page_title="Analyse des Mandats", layout="wide")
+    
+    if not check_access_level():
+        st.warning("Veuillez entrer un mot de passe valide pour accéder à l'application.")
+        return
+    
+    # Chargement des données
+    df = load_data()
+    if df is not None:
+        menu_options = get_menu_options()
+        page = st.sidebar.selectbox("Navigation", menu_options)
+        
+        if page == "Vue Globale":
+            show_global_view(df)
+        elif page == "Vue Détaillée":
+            show_detailed_view(df)
+        elif page == "Tableau Croisé" and st.session_state.access_level == "full":
+            show_pivot_table(df)
+        elif page == "Documentation" and st.session_state.access_level == "full":
+            show_documentation()
+```
+
+4. GESTION DE L'AFFICHAGE CONDITIONNEL
+------------------------------------
+Ajouter cette fonction et l'utiliser dans vos visualisations :
+
+```python
+def get_mandat_display_name(mandat, nom_mandat):
+    """Affiche le nom du mandat selon le niveau d'accès"""
+    if st.session_state.access_level == "full":
+        return f"{mandat} - {nom_mandat}"
+    return f"Mandat {mandat}"
+
+# Exemple d'utilisation dans show_global_view :
+def show_global_view(df):
+    for mandat in df['PORTEFEUILLE'].unique():
+        mandat_data = df[df['PORTEFEUILLE'] == mandat]
+        nom_mandat = mandat_data['Nom du Mandats'].iloc[0]
+        display_name = get_mandat_display_name(mandat, nom_mandat)
+        # Utilisez display_name dans vos graphiques et tableaux
+```
+
+ÉTAPES D'IMPLÉMENTATION
+----------------------
+1. Ajoutez d'abord le système d'authentification
+2. Implémentez la fonction show_pivot_table
+3. Modifiez votre fonction main
+4. Ajoutez la gestion de l'affichage conditionnel
+
+POINTS IMPORTANTS
+----------------
+- Assurez-vous que toutes les dépendances sont importées (streamlit, pandas)
+- Testez chaque niveau d'accès séparément
+- Vérifiez que les chemins d'accès aux données sont corrects
+- Adaptez les noms de colonnes dans le tableau croisé à votre structure de données
+
+SÉCURITÉ
+--------
+- Changez les mots de passe par défaut ("VOTRE_MDP_BASIQUE" et "VOTRE_MDP_COMPLET")
+- Considérez l'utilisation de variables d'environnement pour les mots de passe
+- Vérifiez toujours le niveau d'accès avant d'afficher des informations sensibles
+
+TESTS RECOMMANDÉS
+----------------
+1. Testez les différents niveaux d'accès
+2. Vérifiez que le tableau croisé fonctionne avec différentes combinaisons de colonnes
+3. Assurez-vous que l'affichage conditionnel fonctionne correctement
+4. Testez le téléchargement des données du tableau croisé
